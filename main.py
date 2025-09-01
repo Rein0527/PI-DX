@@ -1,9 +1,21 @@
 # ========================= main.py =========================
 import sys, os
 sys.path.append(os.path.dirname(__file__))  # 確保能找到 config.py
+from utils.crashlog import setup_crashlog
+setup_crashlog()
 import argparse
 from config import AppConfig, RenderConfig, ReductionConfig, AudioConfig
 from app import App
+import logging
+import traceback
+
+# 初始化 logging
+logging.basicConfig(
+    filename="app.log",
+    level=logging.DEBUG,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    encoding="utf-8"
+)
 
 def main():
     ap = argparse.ArgumentParser()
@@ -30,4 +42,11 @@ def main():
     App(cfg, notes=[]).run()
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except Exception as e:
+        # 捕捉任何例外，寫入 app.log
+        logging.error("未捕捉的例外: %s", e, exc_info=True)
+        print("程式發生錯誤，請查看 app.log")
+        # 可選：也把 traceback 輸出到 console（方便 debug）
+        traceback.print_exc()

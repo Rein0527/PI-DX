@@ -1,4 +1,4 @@
-# utils/path.py
+# ======================= utils/path.py =======================
 import sys, os
 
 def resource_path(rel: str) -> str:
