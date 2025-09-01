@@ -14,7 +14,7 @@ class Renderer:
         pygame.init()
         self.cfg = cfg
         self.screen = pygame.display.set_mode((cfg.window_w, cfg.window_h))
-        pygame.display.set_caption("piano→IIDX")
+        pygame.display.set_caption("PI-DX")
         try:
             icon_path = os.path.join(os.path.dirname(__file__), "..", "static", "img", "icon", "icon.png")
             pygame.display.set_icon(pygame.image.load(icon_path))
