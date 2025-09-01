@@ -1,5 +1,5 @@
-# ========================= render/renderer.py =========================
-import os, pygame
+# render/renderer.py
+import os, pygame, logging
 from bisect import bisect_left, bisect_right
 from notes.model import Note
 from config import RenderConfig
@@ -30,16 +30,72 @@ class Renderer:
         self.marquee_gap = 48
         self._last_tick_ms = pygame.time.get_ticks()
 
+        self.first_midi = 21
+        self.last_midi = 108
+        self.total_white = 1
+        self.white_w = float(self.cfg.window_w)
+        self.white_left_edges = []
+        self.white_index_by_pitch = {}
+        self.xw_by_pitch = {}
+
         self.set_key_range(self.cfg.key_range)
+
+    def _rebuild_layout(self):
+        try:
+            whites = [p for p in range(self.first_midi, self.last_midi + 1) if (p % 12) in WHITE_SET]
+            self.total_white = len(whites) or 1
+            self.white_w = float(self.cfg.window_w) / float(self.total_white)
+
+            self.white_left_edges = []
+            x = 0.0
+            for _ in whites:
+                self.white_left_edges.append(x); x += self.white_w
+
+            self.white_index_by_pitch = {}
+            idx = 0
+            for p in range(self.first_midi, self.last_midi + 1):
+                if (p % 12) in WHITE_SET:
+                    idx += 1
+                self.white_index_by_pitch[p] = idx
+
+            self.xw_by_pitch = {}
+            for p in range(self.first_midi, self.last_midi + 1):
+                idx = self.white_index_by_pitch[p]
+                base_x = max(0, idx - 1) * self.white_w
+                is_black = (p % 12) not in WHITE_SET
+                if is_black:
+                    x = base_x + self.white_w * 0.7; w = self.white_w * 0.6
+                else:
+                    x = base_x; w = self.white_w - 1
+                self.xw_by_pitch[p] = (int(x), int(w), is_black)
+
+            logging.debug("Keyboard layout rebuilt: range=[%d,%d], total_white=%d, white_w=%.3f",
+                          self.first_midi, self.last_midi, self.total_white, self.white_w)
+        except Exception:
+            logging.exception("重建鍵盤版面失敗")
+            self.total_white = max(1, self.total_white)
+            self.white_w = float(self.cfg.window_w) / float(self.total_white)
+
+    def _ensure_layout_fresh(self):
+        current_total_width = self.white_w * self.total_white
+        if abs(current_total_width - float(self.cfg.window_w)) > 0.5:
+            self._rebuild_layout()
 
     def set_key_range(self, mode: str):
         if str(mode) == "76":   self.first_midi, self.last_midi = 28, 103
         elif str(mode) == "61": self.first_midi, self.last_midi = 36, 96
         else:                   self.first_midi, self.last_midi = 21, 108
+        self._rebuild_layout()
 
-    def tick(self, fps=60) -> float: return self.clock.tick(fps) / 1000.0
-    def begin_frame(self): self.screen.fill((12, 12, 14))
-    def end_frame(self): pygame.display.flip()
+    def tick(self, fps=60) -> float:
+        return self.clock.tick(fps) / 1000.0
+
+    def begin_frame(self):
+        self.screen.fill((12, 12, 14))
+        self._ensure_layout_fresh()
+
+    def end_frame(self):
+        pygame.display.flip()
 
     def draw_status_bar(self, right_info_text: str = "", song_title: str = ""):
         now = pygame.time.get_ticks()
@@ -95,25 +151,23 @@ class Renderer:
         highlight = highlight or set()
         w, h, ph = self.cfg.window_w, self.cfg.window_h, self.cfg.piano_h
         pygame.draw.rect(self.screen, (28, 28, 32), (0, h - ph, w, ph))
-        total_white = sum(1 for p in range(self.first_midi, self.last_midi + 1) if (p % 12) in WHITE_SET)
-        white_w = w / max(1, total_white)
-        x = 0.0; white_left_edges = []
 
-        for p in range(self.first_midi, self.last_midi + 1):
-            if (p % 12) in WHITE_SET:
-                fill = (230, 230, 230) if p not in highlight else (255, 240, 170)
-                pygame.draw.rect(self.screen, fill, (x, h - ph, white_w - 1, ph))
-                pygame.draw.rect(self.screen, (60, 60, 66), (x, h - ph, white_w - 1, ph), 1)
-                white_left_edges.append(x); x += white_w
+        x = 0.0
+        whites = [p for p in range(self.first_midi, self.last_midi + 1) if (p % 12) in WHITE_SET]
+        for p in whites:
+            fill = (230, 230, 230) if p not in highlight else (255, 240, 170)
+            pygame.draw.rect(self.screen, fill, (x, h - ph, self.white_w - 1, ph))
+            pygame.draw.rect(self.screen, (60, 60, 66), (x, h - ph, self.white_w - 1, ph), 1)
+            x += self.white_w
 
         idx_white = 0
         for p in range(self.first_midi, self.last_midi + 1):
             pc = p % 12
             if pc in WHITE_SET:
-                if pc in {0, 2, 5, 7, 9} and idx_white + 1 < len(white_left_edges):
-                    left = white_left_edges[idx_white]
-                    bw = white_w * 0.6; bh = ph * 0.6
-                    bx = left + white_w * 0.7; by = h - ph
+                if pc in {0, 2, 5, 7, 9} and idx_white + 1 < len(self.white_left_edges):
+                    left = self.white_left_edges[idx_white]
+                    bw = self.white_w * 0.6; bh = ph * 0.6
+                    bx = left + self.white_w * 0.7; by = h - ph
                     fill = (18, 18, 20) if (p + 1) not in highlight else (255, 200, 120)
                     pygame.draw.rect(self.screen, fill, (bx, by, bw, bh))
                     pygame.draw.rect(self.screen, (60, 60, 66), (bx, by, bw, bh), 1)
@@ -123,41 +177,37 @@ class Renderer:
         pygame.draw.line(self.screen, (90, 90, 90), (0, hit_y), (w, hit_y), 2)
 
     def pitch_to_xw(self, pitch: int):
-        total_white = sum(1 for p in range(self.first_midi, self.last_midi + 1) if (p % 12) in WHITE_SET)
-        white_w = self.cfg.window_w / max(1, total_white)
-        white_index = 0
-        for p in range(self.first_midi, pitch + 1):
-            if (p % 12) in WHITE_SET:
-                white_index += 1
-        base_x = max(0, white_index - 1) * white_w
-        is_black = (pitch % 12) not in WHITE_SET
-        if is_black:
-            x = base_x + white_w * 0.7; w = white_w * 0.6
-        else:
-            x = base_x; w = white_w - 1
-        return int(x), int(w), is_black
+        try:
+            return self.xw_by_pitch[pitch]
+        except KeyError:
+            logging.warning("pitch_to_xw: pitch=%r 超出範圍 [%d, %d]，將進行 clamp",
+                            pitch, self.first_midi, self.last_midi)
+            p = min(max(pitch, self.first_midi), self.last_midi)
+            return self.xw_by_pitch[p]
 
-    # ------- notes (只畫可見區域) -------
+    # ------- notes -------
     def draw_notes(self, notes_sorted: list[Note], note_starts: list[float], time_s: float):
-        if not notes_sorted: return
+        if not notes_sorted:
+            return
         hit_y = self.cfg.window_h - self.cfg.piano_h - 6
         pps = self.cfg.pixels_per_second
         visible_from = time_s - 0.1
         visible_to = time_s + (self.cfg.window_h - STATUS_H) / max(1e-6, pps)
 
-        # 用 start 時間做上界，快速定位可見終點
         end_idx = bisect_right(note_starts, visible_to + 0.05)
-
-        # 因為長音可能早於 visible_from 開始，給個回溯秒數（只回看 8 秒，足夠長）
         LOOKBACK = 8.0
         start_probe = max(0.0, visible_from - LOOKBACK)
         start_idx = bisect_left(note_starts, start_probe)
 
         for i in range(start_idx, end_idx):
             n = notes_sorted[i]
-            if n.end < visible_from:   # 仍然不可見就跳過
+            if n.end < visible_from:
                 continue
-            x, w, is_black = self.pitch_to_xw(n.pitch)
+            try:
+                x, w, is_black = self.pitch_to_xw(n.pitch)
+            except Exception:
+                logging.error("單一音符繪製失敗，跳過該音符：%r", n, exc_info=True)
+                continue
             y_start = hit_y - (n.start - time_s) * pps
             h = n.dur * pps
             color = (90, 160, 255) if is_black else (80, 200, 120)

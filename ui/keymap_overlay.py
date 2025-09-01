@@ -1,4 +1,4 @@
-# ========================= ui/keymap_overlay.py =========================
+# ui/keymap_overlay.py
 import pygame
 from typing import Dict, Optional, Tuple
 

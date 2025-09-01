@@ -1,4 +1,4 @@
-# ========================= timeline/scheduler.py =========================
+# timeline/scheduler.py
 from typing import Iterable
 from notes.model import Note
 

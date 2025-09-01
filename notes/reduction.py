@@ -1,4 +1,4 @@
-# ========================= notes/reduction.py =========================
+# notes/reduction.py
 from typing import List
 from notes.model import Note
 from config import ReductionConfig

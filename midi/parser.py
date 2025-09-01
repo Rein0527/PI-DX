@@ -1,4 +1,4 @@
-# ========================= midi/parser.py =========================
+# midi/parser.py
 import mido
 from typing import List, Tuple
 from notes.model import Note

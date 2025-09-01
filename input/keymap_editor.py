@@ -1,4 +1,4 @@
-# ========================= input/keymap_editor.py =========================
+# input/keymap_editor.py
 import tkinter as tk
 from tkinter import ttk
 from typing import Dict, Optional, Tuple

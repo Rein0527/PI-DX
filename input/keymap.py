@@ -1,4 +1,4 @@
-# ========================= input/keymap.py =========================
+# input/keymap.py
 import pygame
 from typing import Dict
 
